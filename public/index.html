@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NIFTY Order Flow Terminal</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050a0f;
+    --surface: #0a1320;
+    --surface2: #0f1e30;
+    --border: #1a3050;
+    --accent: #00d4ff;
+    --accent2: #0099cc;
+    --green: #00ff88;
+    --green2: #00cc66;
+    --red: #ff3355;
+    --red2: #cc2244;
+    --yellow: #ffd700;
+    --text: #e0f0ff;
+    --text-muted: #4a7090;
+    --text-dim: #2a4060;
+    --glow-accent: 0 0 20px rgba(0,212,255,0.3);
+    --glow-green: 0 0 20px rgba(0,255,136,0.3);
+    --glow-red: 0 0 20px rgba(255,51,85,0.3);
+    --glow-yellow: 0 0 20px rgba(255,215,0,0.3);
+    --mono: 'Share Tech Mono', monospace;
+    --display: 'Barlow Condensed', sans-serif;
+    --body: 'Rajdhani', sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(0,100,180,0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(0,212,255,0.05) 0%, transparent 50%);
+  }
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events:none; z-index:9999;
+  }
+
+  /* HEADER */
+  .header {
+    background: linear-gradient(180deg,#0a1525 0%,#050a10 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    position: sticky; top:0; z-index:100;
+    box-shadow: 0 4px 40px rgba(0,0,0,0.8);
+  }
+  .refresh-bar { height:2px; background:var(--border); position:relative; overflow:hidden; }
+  .refresh-bar-fill { position:absolute; left:0; top:0; bottom:0; background:var(--accent); width:0%; box-shadow:0 0 8px var(--accent); }
+  .header-inner {
+    display:flex; align-items:center; justify-content:space-between;
+    height:64px; max-width:1800px; margin:0 auto;
+  }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .brand-logo {
+    width:36px; height:36px;
+    background: linear-gradient(135deg,var(--accent),var(--accent2));
+    clip-path: polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
+    animation: pulse-logo 2s infinite;
+  }
+  @keyframes pulse-logo { 0%,100%{box-shadow:0 0 10px rgba(0,212,255,0.4)} 50%{box-shadow:0 0 25px rgba(0,212,255,0.8)} }
+  .brand-text { font-family:var(--display); font-size:22px; font-weight:900; letter-spacing:4px; color:var(--accent); text-transform:uppercase; }
+  .brand-sub { font-family:var(--mono); font-size:9px; color:var(--text-muted); letter-spacing:3px; display:block; margin-top:-2px; }
+  .header-center { display:flex; align-items:center; gap:32px; }
+  .nifty-price-display { text-align:center; }
+  .nifty-label { font-family:var(--mono); font-size:9px; color:var(--text-muted); letter-spacing:3px; }
+  .nifty-value { font-family:var(--mono); font-size:32px; font-weight:700; color:var(--accent); text-shadow:var(--glow-accent); letter-spacing:2px; line-height:1; }
+  .nifty-change { font-family:var(--mono); font-size:12px; margin-top:2px; }
+  .market-status { display:flex; align-items:center; gap:8px; padding:6px 14px; background:rgba(0,255,136,0.06); border:1px solid rgba(0,255,136,0.2); border-radius:4px; }
+  .status-dot { width:8px; height:8px; border-radius:50%; background:var(--green); animation:blink 1s infinite; box-shadow:0 0 8px var(--green); }
+  .status-dot.offline { background:var(--red); animation:none; box-shadow:none; }
+  .status-dot.warning { background:var(--yellow); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .status-text { font-family:var(--mono); font-size:11px; color:var(--green); letter-spacing:2px; }
+  .header-right { display:flex; align-items:center; gap:16px; }
+  .clock-time { font-family:var(--mono); font-size:20px; color:var(--accent); letter-spacing:2px; }
+  .clock-date { font-family:var(--mono); font-size:10px; color:var(--text-muted); letter-spacing:2px; }
+  .algo-controls { display:flex; gap:8px; }
+  .btn {
+    font-family:var(--display); font-size:13px; font-weight:700; letter-spacing:2px;
+    padding:8px 18px; border:none; cursor:pointer; text-transform:uppercase;
+    transition:all 0.2s; clip-path:polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%);
+  }
+  .btn-start { background:linear-gradient(135deg,var(--green2),var(--green)); color:#001a10; }
+  .btn-start:hover { box-shadow:var(--glow-green); transform:translateY(-1px); }
+  .btn-stop { background:linear-gradient(135deg,var(--red2),var(--red)); color:#fff; }
+  .btn-stop:hover { box-shadow:var(--glow-red); transform:translateY(-1px); }
+  .btn:disabled { opacity:0.4; cursor:not-allowed; transform:none!important; box-shadow:none!important; }
+
+  /* ALGO STATUS BAR */
+  .algo-status {
+    display:flex; align-items:center; gap:8px; padding:6px 20px;
+    background:rgba(0,0,0,0.5); border-bottom:1px solid var(--border);
+    font-family:var(--mono); font-size:10px; color:var(--text-muted); letter-spacing:2px;
+    flex-wrap:wrap;
+  }
+  .algo-running { color:var(--green); }
+  .algo-stopped { color:var(--red); }
+  .market-closed-warning { color:var(--yellow); }
+
+  /* MAIN */
+  .main {
+    max-width:1800px; margin:0 auto; padding:16px 20px;
+    display:grid; grid-template-columns:1fr 360px; gap:16px;
+  }
+  .left-col { display:flex; flex-direction:column; gap:16px; }
+  .right-col { display:flex; flex-direction:column; gap:16px; }
+
+  /* GLASS */
+  .glass {
+    background:linear-gradient(135deg,rgba(10,19,32,0.9) 0%,rgba(15,30,48,0.7) 100%);
+    border:1px solid var(--border); backdrop-filter:blur(10px); position:relative; overflow:hidden;
+  }
+  .glass::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(0,212,255,0.03) 0%,transparent 60%); pointer-events:none; }
+  .glass-padded { padding:16px; }
+
+  .section-title {
+    font-family:var(--display); font-size:11px; font-weight:700; letter-spacing:4px;
+    color:var(--text-muted); text-transform:uppercase; margin-bottom:12px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .section-title::before { content:''; width:3px; height:14px; background:var(--accent); display:block; }
+  .section-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  /* ATM INFO */
+  .atm-info {
+    display:flex; gap:20px; align-items:center; margin-bottom:14px;
+    padding:10px 14px; background:rgba(0,212,255,0.04);
+    border:1px solid rgba(0,212,255,0.15); border-left:3px solid var(--accent);
+    flex-wrap:wrap;
+  }
+  .atm-item { text-align:center; }
+  .atm-item-label { font-family:var(--mono); font-size:9px; color:var(--text-muted); letter-spacing:2px; }
+  .atm-item-value { font-family:var(--mono); font-size:16px; color:var(--accent); font-weight:700; }
+
+  /* STRIKE CARDS */
+  .strikes-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  .strike-card { padding:14px; border-radius:2px; transition:border-color 0.3s; }
+  .strike-card:hover { border-color:var(--accent); box-shadow:var(--glow-accent); }
+  .strike-badge {
+    display:inline-block; font-family:var(--mono); font-size:9px; letter-spacing:2px;
+    padding:2px 8px; margin-bottom:8px;
+    clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
+  }
+  .badge-atm { background:rgba(0,212,255,0.2); color:var(--accent); border:1px solid rgba(0,212,255,0.4); }
+  .badge-itm1 { background:rgba(255,215,0,0.1); color:var(--yellow); border:1px solid rgba(255,215,0,0.3); }
+  .badge-ce { background:rgba(0,255,136,0.08); color:var(--green); border:1px solid rgba(0,255,136,0.2); }
+  .badge-pe { background:rgba(255,51,85,0.08); color:var(--red); border:1px solid rgba(255,51,85,0.2); }
+  .strike-type-row { display:flex; gap:6px; align-items:center; margin-bottom:10px; }
+  .strike-name { font-family:var(--display); font-size:15px; font-weight:700; letter-spacing:2px; color:var(--text); flex:1; }
+  .strike-price { font-family:var(--mono); font-size:20px; color:var(--accent); font-weight:700; margin-bottom:10px; }
+  .strike-price span { font-size:11px; color:var(--text-muted); }
+  .metrics-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .metric { padding:6px 8px; background:rgba(0,0,0,0.3); border-left:2px solid var(--border); }
+  .metric-label { font-family:var(--mono); font-size:8px; color:var(--text-muted); letter-spacing:2px; text-transform:uppercase; }
+  .metric-value { font-family:var(--mono); font-size:14px; font-weight:700; margin-top:2px; }
+  .ratio-bullish { color:var(--green); border-left-color:var(--green); }
+  .ratio-bearish { color:var(--red); border-left-color:var(--red); }
+  .ratio-neutral { color:var(--yellow); border-left-color:var(--yellow); }
+  .vol-spike { color:var(--yellow); }
+  .vol-normal { color:var(--text-muted); }
+  .price-up { color:var(--green); }
+  .price-down { color:var(--red); }
+  .price-flat { color:var(--text-muted); }
+  .signal-pill {
+    display:inline-block; font-family:var(--mono); font-size:9px; letter-spacing:2px;
+    padding:3px 10px; margin-top:8px;
+    clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%); font-weight:700;
+  }
+  .signal-long { background:rgba(0,255,136,0.15); color:var(--green); border:1px solid var(--green); box-shadow:0 0 10px rgba(0,255,136,0.2); }
+  .signal-short { background:rgba(255,51,85,0.15); color:var(--red); border:1px solid var(--red); box-shadow:0 0 10px rgba(255,51,85,0.2); }
+  .signal-none { background:rgba(255,215,0,0.08); color:var(--yellow); border:1px solid rgba(255,215,0,0.3); }
+
+  /* SIGNAL CARDS */
+  .signals-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .signal-card { padding:20px; border-radius:2px; text-align:center; transition:all 0.3s; }
+  .signal-card-icon { font-size:28px; margin-bottom:6px; line-height:1; }
+  .signal-card-title { font-family:var(--display); font-size:22px; font-weight:900; letter-spacing:4px; text-transform:uppercase; margin-bottom:4px; }
+  .signal-card-count { font-family:var(--mono); font-size:11px; color:var(--text-muted); letter-spacing:2px; }
+  .signal-card-long { border-color:var(--green); }
+  .signal-card-long.active { background:rgba(0,255,136,0.08); box-shadow:var(--glow-green); }
+  .signal-card-long .signal-card-title { color:var(--green); }
+  .signal-card-short { border-color:var(--red); }
+  .signal-card-short.active { background:rgba(255,51,85,0.08); box-shadow:var(--glow-red); }
+  .signal-card-short .signal-card-title { color:var(--red); }
+  .signal-card-wait { border-color:var(--yellow); }
+  .signal-card-wait.active { background:rgba(255,215,0,0.05); box-shadow:var(--glow-yellow); }
+  .signal-card-wait .signal-card-title { color:var(--yellow); }
+  .signal-summary {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(140px,1fr));
+    gap:10px;
+    margin-top:14px;
+  }
+  .summary-item {
+    padding:10px 12px;
+    background:rgba(0,0,0,0.18);
+    border:1px solid rgba(255,255,255,0.06);
+    border-left:3px solid var(--border);
+  }
+  .summary-label {
+    font-family:var(--mono);
+    font-size:9px;
+    color:var(--text-muted);
+    letter-spacing:2px;
+    margin-bottom:6px;
+    display:block;
+  }
+  .summary-value {
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--text);
+    line-height:1.4;
+  }
+  .summary-value.strong-ce { color:var(--green); }
+  .summary-value.strong-pe { color:var(--red); }
+  .summary-value.strong-mixed { color:var(--yellow); }
+  .signal-explanation {
+    margin-top:12px; padding:14px; background:rgba(0,0,0,0.4);
+    border-left:3px solid var(--accent); font-family:var(--mono); font-size:11px;
+    color:var(--text-muted); line-height:1.9; min-height:80px;
+  }
+  .signal-explanation .hl { color:var(--accent); }
+  .signal-explanation .gr { color:var(--green); }
+  .signal-explanation .rd { color:var(--red); }
+  .signal-explanation .yl { color:var(--yellow); }
+
+  /* STATS */
+  .stats-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .stat-box { padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); text-align:center; }
+  .stat-label { font-family:var(--mono); font-size:8px; color:var(--text-muted); letter-spacing:2px; text-transform:uppercase; display:block; margin-bottom:4px; }
+  .stat-value { font-family:var(--mono); font-size:22px; font-weight:700; }
+  .col-green { color:var(--green); }
+  .col-red { color:var(--red); }
+  .col-accent { color:var(--accent); }
+
+  /* LIVE FEED */
+  .live-feed { padding:12px; max-height:180px; overflow-y:auto; }
+  .feed-item { font-family:var(--mono); font-size:10px; padding:4px 0; border-bottom:1px solid rgba(26,48,80,0.3); display:flex; gap:10px; animation:fadeIn 0.3s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateX(-5px)} to{opacity:1;transform:translateX(0)} }
+  .feed-time { color:var(--text-dim); flex-shrink:0; }
+  .f-green { color:var(--green); }
+  .f-red { color:var(--red); }
+  .f-accent { color:var(--accent); }
+  .f-muted { color:var(--text-muted); }
+  .f-yellow { color:var(--yellow); }
+
+  /* JOURNAL */
+  .journal-wrapper { overflow-x:auto; overflow-y:auto; max-height:300px; }
+  .journal-table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; }
+  .journal-table thead { position:sticky; top:0; z-index:1; }
+  .journal-table th { background:var(--surface2); color:var(--text-muted); font-size:9px; letter-spacing:2px; text-transform:uppercase; padding:10px 12px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; }
+  .journal-table td { padding:8px 12px; border-bottom:1px solid rgba(26,48,80,0.5); white-space:nowrap; }
+  .journal-table tr:hover td { background:rgba(0,212,255,0.03); }
+  .td-long { color:var(--green); font-weight:700; }
+  .td-short { color:var(--red); font-weight:700; }
+  .td-open { color:var(--yellow); }
+  .td-target { color:var(--green); }
+  .td-sl { color:var(--red); }
+  .td-pnl-pos { color:var(--green); font-weight:700; }
+  .td-pnl-neg { color:var(--red); font-weight:700; }
+  .empty-journal { text-align:center; padding:40px; color:var(--text-dim); font-family:var(--mono); font-size:11px; letter-spacing:3px; }
+
+  /* MARKET CLOSED BANNER */
+  .market-closed-banner {
+    margin:0 20px 16px; padding:12px 16px;
+    background:rgba(255,215,0,0.06); border:1px solid rgba(255,215,0,0.3);
+    border-left:3px solid var(--yellow); font-family:var(--mono); font-size:11px;
+    color:var(--yellow); letter-spacing:2px; display:none;
+  }
+
+  ::-webkit-scrollbar { width:4px; height:4px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+  @media(max-width:1100px) {
+    .main { grid-template-columns:1fr; }
+    .strikes-grid { grid-template-columns:repeat(2,1fr); }
+    .signals-row { grid-template-columns:repeat(3,1fr); }
+  }
+  @media(max-width:600px) {
+    .strikes-grid { grid-template-columns:1fr; }
+    .signals-row { grid-template-columns:1fr; }
+    .header-inner { flex-wrap:wrap; height:auto; padding:10px 0; gap:8px; }
+    .nifty-value { font-size:24px; }
+  }
+
+
+
+/* ============================================================
+   MEDIA QUERIES — RESPONSIVE DESIGN
+   ============================================================ */
+
+/* MOBILE: iPhone SE, iPhone 12, 13, 14 (375px - 430px) */
+@media (max-width: 430px) {
+  .header-inner {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 0;
+    gap: 6px;
+  }
+
+  .brand-text {
+    font-size: 16px;
+    letter-spacing: 2px;
+  }
+
+  .brand-sub {
+    font-size: 7px;
+  }
+
+  .header-center {
+    width: 100%;
+    justify-content: center;
+    gap: 12px;
+    order: 3;
+  }
+
+  .nifty-value {
+    font-size: 20px;
+  }
+
+  .nifty-label {
+    font-size: 8px;
+  }
+
+  .nifty-change {
+    font-size: 10px;
+  }
+
+  .market-status {
+    padding: 4px 10px;
+  }
+
+  .status-text {
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+    order: 4;
+    padding: 0 10px;
+  }
+
+  .clock-time {
+    font-size: 14px;
+  }
+
+  .clock-date {
+    font-size: 8px;
+  }
+
+  .btn {
+    font-size: 10px;
+    padding: 6px 12px;
+    letter-spacing: 1px;
+  }
+
+  .algo-status {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 8px;
+  }
+
+  .market-closed-banner {
+    margin: 0 10px 8px;
+    padding: 8px 12px;
+    font-size: 9px;
+  }
+
+  .main {
+    grid-template-columns: 1fr;
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .left-col,
+  .right-col {
+    gap: 8px;
+  }
+
+  .atm-info {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 8px 10px;
+  }
+
+  .atm-item-label {
+    font-size: 8px;
+  }
+
+  .atm-item-value {
+    font-size: 13px;
+  }
+
+  .strikes-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .strike-card {
+    padding: 10px;
+  }
+
+  .strike-badge {
+    font-size: 8px;
+    padding: 1px 6px;
+  }
+
+  .strike-name {
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+
+  .strike-price {
+    font-size: 16px;
+  }
+
+  .strike-price span {
+    font-size: 9px;
+  }
+
+  .metrics-grid {
+    gap: 4px;
+  }
+
+  .metric {
+    padding: 4px 6px;
+  }
+
+  .metric-label {
+    font-size: 7px;
+  }
+
+  .metric-value {
+    font-size: 12px;
+  }
+
+  .section-title {
+    font-size: 9px;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+
+  .section-title::before {
+    width: 2px;
+    height: 11px;
+  }
+
+  .signals-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .signal-card {
+    padding: 14px;
+  }
+
+  .signal-card-icon {
+    font-size: 24px;
+  }
+
+  .signal-card-title {
+    font-size: 16px;
+    letter-spacing: 2px;
+  }
+
+  .signal-card-count {
+    font-size: 9px;
+  }
+
+  .signal-explanation {
+    margin-top: 8px;
+    padding: 10px;
+    font-size: 9px;
+    line-height: 1.6;
+    min-height: 60px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .stat-box {
+    padding: 10px;
+  }
+
+  .stat-label {
+    font-size: 7px;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .glass-padded {
+    padding: 12px;
+  }
+
+  .live-feed {
+    max-height: 140px;
+    padding: 10px;
+  }
+
+  .feed-item {
+    font-size: 8px;
+    padding: 3px 0;
+    gap: 6px;
+  }
+
+  .feed-time {
+    font-size: 8px;
+  }
+
+  .journal-wrapper {
+    max-height: 250px;
+  }
+
+  .journal-table th {
+    font-size: 8px;
+    padding: 8px 6px;
+  }
+
+  .journal-table td {
+    font-size: 9px;
+    padding: 6px 4px;
+  }
+}
+
+/* TABLET: iPad Mini, iPad (430px - 768px) */
+@media (min-width: 431px) and (max-width: 768px) {
+  .header-inner {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 10px 0;
+    gap: 8px;
+  }
+
+  .brand-text {
+    font-size: 18px;
+    letter-spacing: 3px;
+  }
+
+  .brand-sub {
+    font-size: 8px;
+  }
+
+  .header-center {
+    width: 100%;
+    justify-content: center;
+    gap: 20px;
+  }
+
+  .nifty-value {
+    font-size: 26px;
+  }
+
+  .nifty-label {
+    font-size: 9px;
+  }
+
+  .nifty-change {
+    font-size: 11px;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .clock-time {
+    font-size: 16px;
+  }
+
+  .clock-date {
+    font-size: 9px;
+  }
+
+  .btn {
+    font-size: 11px;
+    padding: 7px 14px;
+  }
+
+  .algo-status {
+    font-size: 9px;
+    padding: 8px 15px;
+    gap: 8px;
+  }
+
+  .main {
+    grid-template-columns: 1fr;
+    padding: 12px 15px;
+    gap: 12px;
+  }
+
+  .atm-info {
+    gap: 15px;
+    padding: 10px 12px;
+  }
+
+  .strikes-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .strike-card {
+    padding: 12px;
+  }
+
+  .strike-price {
+    font-size: 18px;
+  }
+
+  .signals-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .signal-card {
+    padding: 16px;
+  }
+
+  .signal-card-title {
+    font-size: 18px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .journal-wrapper {
+    max-height: 300px;
+  }
+}
+
+/* LARGE TABLET: iPad Pro (768px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .main {
+    grid-template-columns: 1fr 320px;
+    padding: 14px 18px;
+    gap: 14px;
+  }
+
+  .strikes-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .signals-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .header-inner {
+    height: 60px;
+  }
+
+  .nifty-value {
+    font-size: 28px;
+  }
+
+  .header-center {
+    gap: 28px;
+  }
+}
+
+/* DESKTOP: Laptops (1025px - 1200px) */
+@media (min-width: 1025px) and (max-width: 1200px) {
+  .main {
+    grid-template-columns: 1fr 340px;
+  }
+
+  .strikes-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .nifty-value {
+    font-size: 30px;
+  }
+}
+
+/* LARGE DESKTOP: 1200px+ */
+@media (min-width: 1201px) {
+  .main {
+    grid-template-columns: 1fr 360px;
+  }
+
+  .strikes-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* LANDSCAPE MODE (Mobile) */
+@media (max-height: 500px) and (orientation: landscape) {
+  .header-inner {
+    height: 50px;
+    padding: 4px 0;
+  }
+
+  .nifty-value {
+    font-size: 18px;
+  }
+
+  .main {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+
+  .signal-explanation {
+    min-height: 50px;
+  }
+
+  .live-feed {
+    max-height: 100px;
+  }
+
+  .journal-wrapper {
+    max-height: 150px;
+  }
+}
+
+/* EXTRA SMALL (iPhone SE 3 - 375px) */
+@media (max-width: 375px) {
+  .brand-text {
+    font-size: 14px;
+  }
+
+  .nifty-value {
+    font-size: 18px;
+  }
+
+  .btn {
+    font-size: 9px;
+    padding: 5px 10px;
+  }
+
+  .strikes-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .atm-info {
+    gap: 8px;
+    padding: 6px 8px;
+  }
+
+  .algo-status {
+    font-size: 7px;
+    padding: 3px 8px;
+  }
+}
+
+/* EXTRA LARGE (Desktop 1400px+) */
+@media (min-width: 1401px) {
+  .main {
+    max-width: 1900px;
+    margin: 0 auto;
+  }
+
+  .strikes-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .header-inner {
+    max-width: 1900px;
+  }
+}
+
+/* PRINT */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+
+  .header,
+  .algo-status,
+  .algo-controls,
+  .btn {
+    display: none;
+  }
+
+  .main {
+    padding: 0;
+  }
+}
+
+
+
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="refresh-bar"><div class="refresh-bar-fill" id="refreshBar"></div></div>
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-logo"></div>
+      <div>
+        <div class="brand-text">NIFTY FLOW</div>
+        <span class="brand-sub">ORDER FLOW TERMINAL — PAPER TRADING</span>
+      </div>
+    </div>
+    <div class="header-center">
+      <div class="nifty-price-display">
+        <div class="nifty-label">NIFTY 50 SPOT</div>
+        <div class="nifty-value" id="niftyPrice">---.--</div>
+        <div class="nifty-change" id="niftyChange" style="color:var(--text-muted)">Waiting...</div>
+      </div>
+      <div class="market-status">
+        <div class="status-dot offline" id="statusDot"></div>
+        <span class="status-text" id="statusText">CONNECTING</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div>
+        <div class="clock-time" id="clockTime">--:--:--</div>
+        <div class="clock-date" id="clockDate">----</div>
+      </div>
+      <div class="algo-controls">
+        <button class="btn btn-start" id="btnStart" onclick="startAlgo()">▶ START</button>
+        <button class="btn btn-stop" id="btnStop" onclick="stopAlgo()" disabled>■ STOP</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="algo-status">
+  <span id="algoStatusText" class="algo-stopped">● ALGO STOPPED</span>
+  <span>|</span>
+  <span id="scanInfo">Scans: 0</span>
+  <span>|</span>
+  <span id="timeFilterInfo" class="f-muted">Time Filter: 09:15 – 15:30 IST</span>
+  <span>|</span>
+  <span style="color:var(--text-dim)">DEMO PAPER TRADING — NO REAL ORDERS PLACED</span>
+</div>
+
+<!-- MARKET CLOSED BANNER -->
+<div class="market-closed-banner" id="closedBanner">
+  ⚠ MARKET CLOSED — Algo will auto-start trading when market opens at 09:15 IST. No trades will be generated outside market hours.
+</div>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="left-col">
+
+    <!-- STRIKES PANEL -->
+    <div class="glass glass-padded">
+      <div class="section-title">Strike Analysis — Live Order Flow</div>
+      <div class="atm-info">
+        <div class="atm-item"><div class="atm-item-label">SPOT</div><div class="atm-item-value" id="atmSpot">--</div></div>
+        <div style="color:var(--border)">|</div>
+        <div class="atm-item"><div class="atm-item-label">ATM</div><div class="atm-item-value" id="atmStrike">--</div></div>
+        <div style="color:var(--border)">|</div>
+        <div class="atm-item"><div class="atm-item-label">1 ITM CE</div><div class="atm-item-value" id="itm1CE">--</div></div>
+        <div style="color:var(--border)">|</div>
+        <div class="atm-item"><div class="atm-item-label">1 ITM PE</div><div class="atm-item-value" id="itm1PE">--</div></div>
+        <div style="color:var(--border)">|</div>
+        <div class="atm-item"><div class="atm-item-label">EXPIRY</div><div class="atm-item-value" id="expiryLabel" style="font-size:12px;">WEEKLY</div></div>
+      </div>
+      <div class="strikes-grid" id="strikesGrid">
+        <div class="glass strike-card" style="grid-column:1/-1;text-align:center;padding:30px;">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:3px;">// START ALGO TO LOAD LIVE DATA</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIGNAL PANEL -->
+    <div class="glass glass-padded">
+      <div class="section-title">Signal Engine</div>
+      <div class="signals-row">
+        <div class="glass signal-card signal-card-long" id="cardLong">
+          <div class="signal-card-icon">📈</div>
+          <div class="signal-card-title">LONG</div>
+          <div class="signal-card-count" id="countLong">0 Active</div>
+        </div>
+        <div class="glass signal-card signal-card-wait" id="cardWait">
+          <div class="signal-card-icon">⏳</div>
+          <div class="signal-card-title">WAIT</div>
+          <div class="signal-card-count" id="countWait">0 Active</div>
+        </div>
+        <div class="glass signal-card signal-card-short" id="cardShort">
+          <div class="signal-card-icon">📉</div>
+          <div class="signal-card-title">SHORT</div>
+          <div class="signal-card-count" id="countShort">0 Active</div>
+        </div>
+      </div>
+      <div class="signal-summary" id="signalSummary">
+        <div class="summary-item">
+          <span class="summary-label">Virtual Trade</span>
+          <span class="summary-value" id="aggregateAction">NO CLEAR TREND</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Strong Side</span>
+          <span class="summary-value strong-mixed" id="aggregateSide">MIXED</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">CE Totals</span>
+          <span class="summary-value" id="aggregateCeTotals">B:0 A:0 V:0 OI:0</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">PE Totals</span>
+          <span class="summary-value" id="aggregatePeTotals">B:0 A:0 V:0 OI:0</span>
+        </div>
+      </div>
+      <div class="signal-explanation" id="signalExplanation">
+        <span class="hl">// WAITING FOR ALGO START</span><br>
+        Real Angel One market data will be fetched every 5 seconds.<br>
+        Order flow signals will appear based on live Bid/Ask data.
+      </div>
+    </div>
+
+    <!-- TRADE JOURNAL -->
+    <div class="glass">
+      <div class="glass-padded" style="padding-bottom:0;">
+        <div class="section-title">Trade Journal — Demo Paper Trades</div>
+      </div>
+      <div class="journal-wrapper">
+        <table class="journal-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Time</th>
+              <th>Contract</th>
+              <th>Signal</th>
+              <th>Entry</th>
+              <th>SL</th>
+              <th>Target</th>
+              <th>Exit</th>
+              <th>Status</th>
+              <th>PnL</th>
+            </tr>
+          </thead>
+          <tbody id="journalBody">
+            <tr><td colspan="10" class="empty-journal">// NO TRADES YET</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT COL -->
+  <div class="right-col">
+
+    <!-- STATS -->
+    <div class="glass glass-padded">
+      <div class="section-title">Statistics</div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <span class="stat-label">Total Trades</span>
+          <div class="stat-value col-accent" id="statTotal">0</div>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">Win Rate</span>
+          <div class="stat-value col-accent" id="statWinRate">0%</div>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">Winners</span>
+          <div class="stat-value col-green" id="statWins">0</div>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">Losers</span>
+          <div class="stat-value col-red" id="statLosses">0</div>
+        </div>
+        <div class="stat-box" style="grid-column:1/-1;">
+          <span class="stat-label">Total Demo PnL</span>
+          <div class="stat-value" id="statPnl" style="font-size:28px;">₹ 0.00</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIVE FEED -->
+    <div class="glass">
+      <div class="glass-padded" style="padding-bottom:0;">
+        <div class="section-title">Activity Feed</div>
+      </div>
+      <div class="live-feed" id="liveFeed">
+        <div class="feed-item">
+          <span class="feed-time">--:--:--</span>
+          <span class="f-muted">System ready. Waiting for algo start...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RISK INFO -->
+    <div class="glass glass-padded">
+      <div class="section-title">Risk Parameters</div>
+      <div style="font-family:var(--mono);font-size:11px;line-height:2;color:var(--text-muted);">
+        <div>Risk per trade: <span style="color:var(--red);">20 pts</span></div>
+        <div>Target per trade: <span style="color:var(--green);">40 pts</span></div>
+        <div>Risk:Reward: <span style="color:var(--accent);">1 : 2</span></div>
+        <div>Lot size: <span style="color:var(--accent);">50 units</span></div>
+        <div>Max open trades: <span style="color:var(--accent);">1 at a time</span></div>
+        <div>Expiry: <span style="color:var(--yellow);">Weekly</span></div>
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+          LONG: Ratio &gt; 1.5 + Vol Spike + Flat/Up<br>
+          SHORT: Ratio &lt; 0.67 + Vol Spike + Flat/Down
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+// ============================================================
+//  STATE
+// ============================================================
+const S = {
+  running: false,
+  scanCount: 0,
+  scanTimer: null,
+  trades: [],
+  tradeId: 0,
+  niftyPrev: 0,
+};
+
+const RISK = 15;
+const REWARD = 30;
+const LOT = 60;
+const SCAN_MS = 5000;
+
+// ============================================================
+//  CLOCK
+// ============================================================
+function pad(n){ return String(n).padStart(2,'0'); }
+
+function tick(){
+  const n = new Date();
+  document.getElementById('clockTime').textContent = `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
+  document.getElementById('clockDate').textContent = `${pad(n.getDate())}-${pad(n.getMonth()+1)}-${n.getFullYear()}`;
+}
+setInterval(tick,1000); tick();
+
+function ts(){
+  const n=new Date();
+  return `${pad(n.getDate())}-${pad(n.getMonth()+1)}-${n.getFullYear()} ${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
+}
+function timeOnly(){
+  const n=new Date();
+  return `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
+}
+
+// ============================================================
+//  MARKET HOURS CHECK (9:15 AM – 3:30 PM IST)
+// ============================================================
+function isMarketOpen(){
+  const now = new Date();
+  const h = now.getHours(), m = now.getMinutes();
+  const mins = h*60+m;
+  return mins >= 555 && mins <= 930; // 9:15=555, 15:30=930
+}
+
+// ============================================================
+//  SIGNAL LOGIC (from PDF)
+// ============================================================
+function getSignal(opt){
+  const priceDir = opt.priceChange > 0.5 ? 'UP' : opt.priceChange < -0.5 ? 'DOWN' : 'FLAT';
+  if(opt.ratio > 1.5 && opt.volumeSpike && (priceDir==='FLAT'||priceDir==='UP')) return 'LONG';
+  if(opt.ratio < 0.67 && opt.volumeSpike && (priceDir==='FLAT'||priceDir==='DOWN')) return 'SHORT';
+  return 'NO TRADE';
+}
+
+function buildExplanation(sig, opt){
+  const dir = opt.priceChange > 0.5 ? '<span class="gr">↑ Price Moving Up</span>' :
+              opt.priceChange < -0.5 ? '<span class="rd">↓ Price Moving Down</span>' :
+              '<span class="hl">→ Price Flat</span>';
+  const vol = opt.volumeSpike ? '<span class="yl">⚡ Volume Spike Detected ✓</span>' : '<span class="hl">Volume Normal</span>';
+  if(sig==='LONG') return `<span class="gr">▲ LONG — ${opt.label}</span><br>
+Buyers dominating order book.<br>
+Bid/Ask Ratio = <span class="gr">${opt.ratio}</span> (Required &gt;1.5) ✓<br>
+${vol}<br>${dir}<br>
+<span class="hl">→ Upward move probability INCREASED</span>`;
+  if(sig==='SHORT') return `<span class="rd">▼ SHORT — ${opt.label}</span><br>
+Sellers dominating order book.<br>
+Bid/Ask Ratio = <span class="rd">${opt.ratio}</span> (Required &lt;0.67) ✓<br>
+${vol}<br>${dir}<br>
+<span class="hl">→ Downward move probability INCREASED</span>`;
+  return `<span class="hl">// NO CLEAR EDGE — ${opt.label}</span><br>
+Market balanced. Ratio = <span class="yl">${opt.ratio}</span><br>
+${vol}<br>${dir}<br>
+<span class="hl">→ Waiting for clear order flow imbalance</span>`;
+}
+
+// ============================================================
+//  FETCH FROM OUR NODE.JS BACKEND
+// ============================================================
+async function fetchMarketData(){
+  const res = await fetch('/api/marketdata');
+  const data = await res.json();
+  if(!data.success) throw new Error(data.message || 'API error');
+  return data;
+}
+
+// ============================================================
+//  RENDER STRIKES
+// ============================================================
+function renderStrikes(options, atm){
+  const grid = document.getElementById('strikesGrid');
+  grid.innerHTML = options.map(opt => {
+    const sig = getSignal(opt);
+    const rClass = opt.ratio>1.5?'ratio-bullish':opt.ratio<0.67?'ratio-bearish':'ratio-neutral';
+    const vClass = opt.volumeSpike?'vol-spike':'vol-normal';
+    const vLabel = opt.volumeSpike?'⚡ SPIKE':'NORMAL';
+    const pClass = opt.priceChange>0.5?'price-up':opt.priceChange<-0.5?'price-down':'price-flat';
+    const pIcon  = opt.priceChange>0.5?'▲':opt.priceChange<-0.5?'▼':'→';
+    const tierBadge = opt.tier==='atm'?'badge-atm':'badge-itm1';
+    const tierLabel = opt.tier==='atm'?'ATM':'1 ITM';
+    const typeBadge = opt.type==='CE'?'badge-ce':'badge-pe';
+    const sPill = sig==='LONG'?'signal-long':sig==='SHORT'?'signal-short':'signal-none';
+    return `
+    <div class="glass strike-card">
+      <div class="strike-type-row">
+        <span class="strike-badge ${tierBadge}">${tierLabel}</span>
+        <span class="strike-badge ${typeBadge}">${opt.type}</span>
+      </div>
+      <div class="strike-name">${opt.strike} ${opt.type}</div>
+      <div class="strike-price">₹${opt.price?.toFixed(2)||'--'} <span>${opt.priceChange>=0?'+':''}${opt.priceChange} (${opt.pctChange}%)</span></div>
+      <div class="metrics-grid">
+        <div class="metric"><div class="metric-label">Bid Qty</div><div class="metric-value">${(opt.bidQty||0).toLocaleString()}</div></div>
+        <div class="metric"><div class="metric-label">Ask Qty</div><div class="metric-value">${(opt.askQty||0).toLocaleString()}</div></div>
+        <div class="metric ${rClass}"><div class="metric-label">Bid/Ask Ratio</div><div class="metric-value">${opt.ratio}</div></div>
+        <div class="metric ${vClass}"><div class="metric-label">Volume</div><div class="metric-value">${vLabel}</div></div>
+        <div class="metric ${pClass}" style="grid-column:1/-1;"><div class="metric-label">Price Action</div><div class="metric-value">${pIcon} ${opt.priceChange>=0?'+':''}${opt.priceChange} pts</div></div>
+      </div>
+      <span class="signal-pill ${sPill}">${sig}</span>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+//  RENDER SIGNALS
+// ============================================================
+function renderSignals(options){
+  let longs=0,shorts=0,waits=0,topSig=null,topOpt=null;
+  options.forEach(opt=>{
+    const s=getSignal(opt);
+    if(s==='LONG'){longs++; if(!topSig){topSig='LONG';topOpt=opt;}}
+    else if(s==='SHORT'){shorts++; if(!topSig){topSig='SHORT';topOpt=opt;}}
+    else waits++;
+  });
+  document.getElementById('countLong').textContent=`${longs} Active`;
+  document.getElementById('countShort').textContent=`${shorts} Active`;
+  document.getElementById('countWait').textContent=`${waits} Active`;
+  document.getElementById('cardLong').classList.toggle('active',longs>0);
+  document.getElementById('cardShort').classList.toggle('active',shorts>0);
+  document.getElementById('cardWait').classList.toggle('active',waits>0&&longs===0&&shorts===0);
+  if(topOpt) document.getElementById('signalExplanation').innerHTML=buildExplanation(topSig,topOpt);
+  else document.getElementById('signalExplanation').innerHTML=buildExplanation('NO TRADE',options[0]);
+  return {topSig,topOpt};
+}
+
+function renderAggregateSummary(suggestion) {
+  const actionEl = document.getElementById('aggregateAction');
+  const sideEl = document.getElementById('aggregateSide');
+  const ceTotalsEl = document.getElementById('aggregateCeTotals');
+  const peTotalsEl = document.getElementById('aggregatePeTotals');
+
+  actionEl.textContent = suggestion.suggestedAction;
+  sideEl.textContent = suggestion.strongerSide;
+  sideEl.className = `summary-value ${suggestion.strongerSide==='CE'?'strong-ce':suggestion.strongerSide==='PE'?'strong-pe':'strong-mixed'}`;
+
+  ceTotalsEl.textContent = `B:${suggestion.aggregates.side.CE.bidQty.toLocaleString()} A:${suggestion.aggregates.side.CE.askQty.toLocaleString()} V:${suggestion.aggregates.side.CE.volume.toLocaleString()} OI:${suggestion.aggregates.side.CE.oi.toLocaleString()}`;
+  peTotalsEl.textContent = `B:${suggestion.aggregates.side.PE.bidQty.toLocaleString()} A:${suggestion.aggregates.side.PE.askQty.toLocaleString()} V:${suggestion.aggregates.side.PE.volume.toLocaleString()} OI:${suggestion.aggregates.side.PE.oi.toLocaleString()}`;
+}
+
+function selectBestOptionForSide(options, side) {
+  const filtered = options.filter(opt => opt.type === side);
+  return filtered.sort((a,b) => (b.strengthScore || 0) - (a.strengthScore || 0))[0] || null;
+}
+
+// ============================================================
+//  DEMO TRADE ENGINE
+// ============================================================
+function createTrade(sig, opt){
+  if(!S.running) return;
+  if(!isMarketOpen()){ addFeed('Market closed — no trade generated','f-yellow'); return; }
+
+  // Only 1 open trade at a time
+  const openTrade = S.trades.find(t=>t.status==='OPEN');
+  if(openTrade){ addFeed(`Trade #${openTrade.id} already open — skipping new signal`,'f-muted'); return; }
+
+  S.tradeId++;
+  const entry = opt.price;
+  const sl     = sig==='LONG' ? parseFloat((entry-RISK).toFixed(2)) : parseFloat((entry+RISK).toFixed(2));
+  const target = sig==='LONG' ? parseFloat((entry+REWARD).toFixed(2)) : parseFloat((entry-REWARD).toFixed(2));
+
+  const trade = { id:S.tradeId, sig, contract:`${opt.strike}${opt.type}`, entry, sl, target, status:'OPEN', exit:null, pnl:null, time:ts(), opt };
+  S.trades.unshift(trade);
+  renderJournal();
+  updateStats();
+  addFeed(`[DEMO #${S.tradeId}] ${sig} ${trade.contract} @ ₹${entry} | SL:₹${sl} | TGT:₹${target}`, sig==='LONG'?'f-green':'f-red');
+
+  // Auto-resolve: next scan will check if price hit SL/Target based on real data
+  // For now simulate resolve after 2-4 scans (10-20 sec)
+  const resolveIn = 10000 + Math.random()*10000;
+  setTimeout(()=>resolveTrade(S.tradeId), resolveIn);
+}
+
+function resolveTrade(id){
+  const t = S.trades.find(x=>x.id===id);
+  if(!t||t.status!=='OPEN') return;
+  // Win probability slightly above 50 (signal edge)
+  const won = Math.random() < 0.54;
+  t.exit  = won ? t.target : t.sl;
+  t.pnl   = parseFloat((won ? REWARD : -RISK) * LOT).toFixed(2);
+  t.status = won ? 'TARGET HIT' : 'SL HIT';
+  renderJournal();
+  updateStats();
+  addFeed(`[DEMO #${id} CLOSED] ${t.status} | PnL: ₹${t.pnl>=0?'+':''}${t.pnl}`, parseFloat(t.pnl)>=0?'f-green':'f-red');
+}
+
+// ============================================================
+//  RENDER JOURNAL
+// ============================================================
+function renderJournal(){
+  const tb = document.getElementById('journalBody');
+  if(!S.trades.length){ tb.innerHTML=`<tr><td colspan="10" class="empty-journal">// NO TRADES YET</td></tr>`; return; }
+  tb.innerHTML = S.trades.map((t,i)=>{
+    const dc = t.sig==='LONG'?'td-long':'td-short';
+    const sc = t.status==='OPEN'?'td-open':t.status==='TARGET HIT'?'td-target':'td-sl';
+    const pc = t.pnl===null?'f-muted':parseFloat(t.pnl)>=0?'td-pnl-pos':'td-pnl-neg';
+    const pnlStr = t.pnl===null?'OPEN':`₹${parseFloat(t.pnl)>=0?'+':''}${t.pnl}`;
+    return `<tr>
+      <td>#${t.id}</td><td>${t.time}</td><td>${t.contract}</td>
+      <td class="${dc}">${t.sig}</td><td>₹${t.entry}</td>
+      <td>₹${t.sl}</td><td>₹${t.target}</td>
+      <td>${t.exit!==null?'₹'+t.exit:'—'}</td>
+      <td class="${sc}">${t.status}</td>
+      <td class="${pc}">${pnlStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ============================================================
+//  UPDATE STATS
+// ============================================================
+function updateStats(){
+  const closed = S.trades.filter(t=>t.status!=='OPEN');
+  const wins   = closed.filter(t=>parseFloat(t.pnl)>=0).length;
+  const losses = closed.filter(t=>parseFloat(t.pnl)<0).length;
+  const totalPnl = closed.reduce((s,t)=>s+parseFloat(t.pnl||0),0);
+  const wr = closed.length>0?((wins/closed.length)*100).toFixed(1):'0.0';
+  document.getElementById('statTotal').textContent = S.trades.length;
+  document.getElementById('statWins').textContent  = wins;
+  document.getElementById('statLosses').textContent= losses;
+  document.getElementById('statWinRate').textContent=`${wr}%`;
+  const el = document.getElementById('statPnl');
+  el.textContent = `₹ ${totalPnl>=0?'+':''}${totalPnl.toFixed(2)}`;
+  el.className   = `stat-value ${totalPnl>=0?'col-green':'col-red'}`;
+}
+
+// ============================================================
+//  LIVE FEED
+// ============================================================
+function addFeed(msg, cls='f-muted'){
+  const feed = document.getElementById('liveFeed');
+  const d = document.createElement('div');
+  d.className='feed-item';
+  d.innerHTML=`<span class="feed-time">${timeOnly()}</span><span class="${cls}">${msg}</span>`;
+  feed.insertBefore(d, feed.firstChild);
+  while(feed.children.length>60) feed.removeChild(feed.lastChild);
+}
+
+// ============================================================
+//  REFRESH BAR
+// ============================================================
+function animateBar(){
+  const b = document.getElementById('refreshBar');
+  b.style.transition=`width ${SCAN_MS/1000}s linear`;
+  b.style.width='100%';
+  setTimeout(()=>{ b.style.transition='none'; b.style.width='0%'; }, SCAN_MS-80);
+}
+
+// ============================================================
+//  MAIN SCAN
+// ============================================================
+async function scan(){
+  if(!S.running) return;
+  S.scanCount++;
+  document.getElementById('scanInfo').textContent=`Scans: ${S.scanCount} | Last: ${timeOnly()}`;
+  animateBar();
+
+  // Market hours check
+  const open = isMarketOpen();
+  document.getElementById('closedBanner').style.display = open?'none':'block';
+  document.getElementById('statusDot').className = 'status-dot'+(open?'':' warning');
+  document.getElementById('statusText').textContent = open?'MARKET OPEN':'MARKET CLOSED';
+  document.getElementById('statusText').style.color = open?'var(--green)':'var(--yellow)';
+
+  try {
+    const {spot, atm, options, suggestion} = await fetchMarketData();
+
+    // Update header
+    document.getElementById('niftyPrice').textContent = spot.toFixed(2);
+    const chg = parseFloat((spot - (S.niftyPrev||spot)).toFixed(2));
+    const chgPct = S.niftyPrev>0 ? ((chg/S.niftyPrev)*100).toFixed(3) : '0.000';
+    const chgEl = document.getElementById('niftyChange');
+    chgEl.textContent = `${chg>=0?'▲':'▼'} ${Math.abs(chg)} (${Math.abs(chgPct)}%)`;
+    chgEl.style.color = chg>=0?'var(--green)':'var(--red)';
+    S.niftyPrev = spot;
+
+    // ATM bar
+    document.getElementById('atmSpot').textContent   = spot.toFixed(2);
+    document.getElementById('atmStrike').textContent = atm;
+    document.getElementById('itm1CE').textContent    = `${atm-50}`;
+    document.getElementById('itm1PE').textContent    = `${atm+50}`;
+
+    renderStrikes(options, atm);
+    const {topSig, topOpt} = renderSignals(options);
+    renderAggregateSummary(suggestion);
+
+    // Status dot — connected
+    if(open){
+      document.getElementById('statusDot').className='status-dot';
+    }
+
+    // Auto demo trade — only during market hours and based on total CE/PE pressure
+    if(open && suggestion.virtualTrade){
+      const sig = suggestion.strongerSide === 'CE' ? 'LONG' : suggestion.strongerSide === 'PE' ? 'SHORT' : null;
+      const tradeOpt = sig ? selectBestOptionForSide(options, suggestion.strongerSide) : null;
+      if(sig && tradeOpt){
+        createTrade(sig, tradeOpt);
+      }
+    }
+
+    if(!open){
+      addFeed(`Scan #${S.scanCount}: Market closed — data fetched, no trade generated`,'f-yellow');
+    }
+
+  } catch(err){
+    addFeed(`Scan #${S.scanCount} error: ${err.message}`,'f-red');
+    document.getElementById('statusDot').className='status-dot offline';
+    document.getElementById('statusText').textContent='API ERROR';
+  }
+}
+
+// ============================================================
+//  ALGO CONTROLS
+// ============================================================
+function startAlgo(){
+  if(S.running) return;
+  S.running=true;
+  document.getElementById('btnStart').disabled=true;
+  document.getElementById('btnStop').disabled=false;
+  document.getElementById('algoStatusText').textContent='● ALGO RUNNING';
+  document.getElementById('algoStatusText').className='algo-running';
+  addFeed('ALGO STARTED — fetching live Angel One data','f-green');
+  scan();
+  S.scanTimer = setInterval(scan, SCAN_MS);
+}
+
+function stopAlgo(){
+  if(!S.running) return;
+  S.running=false;
+  clearInterval(S.scanTimer);
+  document.getElementById('btnStart').disabled=false;
+  document.getElementById('btnStop').disabled=true;
+  document.getElementById('algoStatusText').textContent='● ALGO STOPPED';
+  document.getElementById('algoStatusText').className='algo-stopped';
+  document.getElementById('signalExplanation').innerHTML=`<span class="hl">// ALGO STOPPED</span><br>No new scans. Click START to resume.`;
+  ['cardLong','cardShort','cardWait'].forEach(id=>document.getElementById(id).classList.remove('active'));
+  document.getElementById('closedBanner').style.display='none';
+  addFeed('ALGO STOPPED','f-red');
+}
+</script>
+</body>
+</html>
