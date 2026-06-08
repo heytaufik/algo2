@@ -396,17 +396,39 @@ app.get('/api/marketdata', async (req, res) => {
 
     // 4. Fetch full market data
     const optionData = await fetchOptionData(tokens);
+    const debug = req.query.debug === '1' || req.query.debug === 'true';
+
+    function sumDepthQty(entries) {
+      if (!Array.isArray(entries)) return 0;
+      return entries.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0);
+    }
+
+    function describeDepth(entries) {
+      if (!Array.isArray(entries)) return { count: 0, total: 0, levels: [] };
+      const levels = entries.map(item => ({ price: item?.price || null, quantity: Number(item?.quantity) || 0 }));
+      return {
+        count: levels.length,
+        total: levels.reduce((sum, level) => sum + level.quantity, 0),
+        levels,
+      };
+    }
 
     // 5. Build response with strength scoring
     const rawOptions = optionData.map(opt => {
       const meta = tokenMap[opt.symbolToken] || {};
-      const bidQty = opt.depth?.buy?.[0]?.quantity || 0;
-      const askQty = opt.depth?.sell?.[0]?.quantity || 0;
+      const bidDepth = describeDepth(opt.depth?.buy);
+      const askDepth = describeDepth(opt.depth?.sell);
+      const bidQty = bidDepth.total;
+      const askQty = askDepth.total;
       const ratio = askQty > 0 ? parseFloat((bidQty / askQty).toFixed(3)) : 0;
       const priceChange = parseFloat((opt.ltp - opt.close).toFixed(2));
       const pctChange = opt.close > 0
         ? parseFloat(((priceChange / opt.close) * 100).toFixed(2))
         : 0;
+
+      if (debug) {
+        console.log(`DEBUG ${meta.label || opt.symbolToken}: buyCount=${bidDepth.count} buyTotal=${bidQty} sellCount=${askDepth.count} sellTotal=${askQty}`);
+      }
 
       return {
         label: meta.label,
@@ -427,6 +449,10 @@ app.get('/api/marketdata', async (req, res) => {
         high: opt.high,
         low: opt.low,
         oi: opt.opnInterest,
+        bidDepthCount: bidDepth.count,
+        askDepthCount: askDepth.count,
+        bidDepthLevels: debug ? bidDepth.levels : undefined,
+        askDepthLevels: debug ? askDepth.levels : undefined,
       };
     });
 
